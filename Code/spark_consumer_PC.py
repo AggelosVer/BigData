@@ -38,48 +38,81 @@ spark = (
     .config("spark.mongodb.write.connection.uri", "mongodb://mongo:27017")
     .getOrCreate()
 )
+spark.sparkContext.setLogLevel("ERROR")
 
 # 3. Σύνδεση στον Redpanda (Kafka-compatible)
-# Μπορείτε να αντικαταστήσετε το 'uxsim' με όνομα του topic της επιλογής σας
 df = (
     spark.readStream
     .format("kafka")
     .option("kafka.bootstrap.servers", "redpanda:9092")
-    .option("subscribe", "uxsim")
+    .option("subscribe", "vehicle_positions")
     .option("startingOffsets", "latest")
     .load()
 )
 
 # 4. Parsing του JSON και Μετασχηματισμός
-# Χρησιμοποιείστε "cast" για να μετατρεψετε τις raw binary τιμες σε ευαναγνωστο JSON string
-# Εφαρμοστε το schema στο string, δημιουργώντας ενα μοναδικό struct με την ονομασία data
-# Καθε key το JSON (name, orig, dest, etc.) μετατρεπεται σε ξεχωριστη στήλη στο DataFrame.
-# parsed = df.select ...
+# Χρησιμοποιούμε "cast" για να μετατρέψουμε τις raw binary τιμές σε αναγνώσιμο JSON string.
+# Εφαρμόζουμε το schema στο string, δημιουργώντας ένα struct με την ονομασία data.
+# Κάθε key του JSON (name, orig, dest, etc.) μετατρέπεται σε ξεχωριστή στήλη.
+parsed = (
+    df
+    .select(col("value").cast("string").alias("json_str"))
+    .select(from_json(col("json_str"), schema).alias("data"))
+    .select("data.*")
+)
 
 # 5. Υπολογισμός Στατιστικών ανά Ακμή (link) και Χρόνο (t)
 # t = time από την εξομοίωση, v = ταχύτητα οχήματος
-# Στον παρακάτω κώδικα χρησιμοποιούμε το πεδίο t της UXsim ως "time". Αν η εξομοίωση στέλνει δεδομένα πολύ γρήγορα, το Spark θα τα ομαδοποιεί σωστά ανά simulation step.
-# stats = parsed.  ....
+# vcount: πλήθος οχημάτων, vspeed: μέση ταχύτητα
+stats = (
+    parsed
+    .groupBy(
+        col("t").alias("time"),
+        col("link")
+    )
+    .agg(
+        count("*").alias("vcount"),
+        avg("v").alias("vspeed")
+    )
+)
 
 
 # 6α. Αποθήκευση στη MongoDB των αρχικών δεδομενων
-# parsed.writeStream ...
-    
+# outputMode("append"): κάθε νέο record γράφεται αμέσως στη MongoDB
+query_raw = (
+    parsed.writeStream
+    .outputMode("append")
+    .format("mongodb")
+    .option("checkpointLocation", "/tmp/checkpoints/raw")
+    .option("spark.mongodb.write.database", "uxsim_db")
+    .option("spark.mongodb.write.collection", "raw_data")
+    .start()
+)
 
 # 6β. Αποθήκευση στη MongoDB των επεξεργασμενων δεδομενων
-# Το outputMode("append") στο streaming απαιτεί τη χρήση Watermarks (χρονικά όρια) για να ξέρει το Spark πότε "έκλεισε" ένα group και μπορεί να το γράψει.
-# Διαφορετικά, χρησιμοποιούμε το .outputMode("update"), το οποίο γράφει στη MongoDB μόνο τα links που άλλαξαν οι τιμές τους.
+# Το outputMode("complete") γράφει ολόκληρο το αποτέλεσμα κάθε φορά.
+# Ο MongoDB Spark Connector δεν υποστηρίζει "update" mode για aggregations.
 query_mongo = (
     stats.writeStream
-     ...
-    )
+    .outputMode("complete")
+    .format("mongodb")
+    .option("checkpointLocation", "/tmp/checkpoints/stats")
+    .option("spark.mongodb.write.database", "uxsim_db")
+    .option("spark.mongodb.write.collection", "processed_data")
+    .start()
+)
 
 # 7. Προβολή στην κονσόλα για debugging (προαιρετικά)
 query_console = (
     stats.writeStream
-     ...
-    )
+    .outputMode("complete")
+    .format("console")
+    .option("truncate", False)
+    .option("numRows", 30)
+    .trigger(processingTime="5 seconds")
+    .start()
+)
 
 
 # Αναμονή για τον τερματισμό όλων των queries
-spark.streams.awaitAnyTermination() # query_mongo.awaitTermination()
+spark.streams.awaitAnyTermination()
