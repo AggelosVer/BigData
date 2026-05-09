@@ -78,27 +78,55 @@ stats = (
 
 
 # 6α. Αποθήκευση στη MongoDB των αρχικών δεδομενων
-# outputMode("append"): κάθε νέο record γράφεται αμέσως στη MongoDB
+# Database: traffic, Collection: raw_data
+# Χρησιμοποιούμε foreachBatch για πλήρη έλεγχο της εγγραφής
+def write_raw_to_mongo(batch_df, batch_id):
+    try:
+        rows = batch_df.count()
+        if rows > 0:
+            (batch_df.write
+                .format("mongodb")
+                .option("spark.mongodb.write.connection.uri", "mongodb://mongo:27017")
+                .option("spark.mongodb.write.database", "traffic")
+                .option("spark.mongodb.write.collection", "raw_data")
+                .mode("append")
+                .save())
+            print(f"[raw_data] Batch {batch_id}: {rows} rows -> MongoDB OK")
+    except Exception as e:
+        print(f"[raw_data] Batch {batch_id}: ERROR -> {e}")
+
 query_raw = (
     parsed.writeStream
     .outputMode("append")
-    .format("mongodb")
+    .foreachBatch(write_raw_to_mongo)
     .option("checkpointLocation", "/tmp/checkpoints/raw")
-    .option("spark.mongodb.write.database", "uxsim_db")
-    .option("spark.mongodb.write.collection", "raw_data")
+    .trigger(processingTime="5 seconds")
     .start()
 )
 
-# 6β. Αποθήκευση στη MongoDB των επεξεργασμενων δεδομενων
-# Το outputMode("complete") γράφει ολόκληρο το αποτέλεσμα κάθε φορά.
-# Ο MongoDB Spark Connector δεν υποστηρίζει "update" mode για aggregations.
+# 6β. Αποθήκευση στη MongoDB των επεξεργασμένων δεδομένων
+# Database: traffic, Collection: stats
+def write_stats_to_mongo(batch_df, batch_id):
+    try:
+        rows = batch_df.count()
+        if rows > 0:
+            (batch_df.write
+                .format("mongodb")
+                .option("spark.mongodb.write.connection.uri", "mongodb://mongo:27017")
+                .option("spark.mongodb.write.database", "traffic")
+                .option("spark.mongodb.write.collection", "stats")
+                .mode("append")
+                .save())
+            print(f"[stats] Batch {batch_id}: {rows} rows -> MongoDB OK")
+    except Exception as e:
+        print(f"[stats] Batch {batch_id}: ERROR -> {e}")
+
 query_mongo = (
     stats.writeStream
-    .outputMode("complete")
-    .format("mongodb")
+    .outputMode("update")
+    .foreachBatch(write_stats_to_mongo)
     .option("checkpointLocation", "/tmp/checkpoints/stats")
-    .option("spark.mongodb.write.database", "uxsim_db")
-    .option("spark.mongodb.write.collection", "processed_data")
+    .trigger(processingTime="5 seconds")
     .start()
 )
 
