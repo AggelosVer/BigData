@@ -1,23 +1,8 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, avg, count
+from pyspark.sql.functions import from_json, col, avg, count, max, min
 from pyspark.sql.types import StructType, StringType, DoubleType, IntegerType
 
-# Μπορειτε να χρησιμοποιειτε παρενθέσεις ( ... ) γύρω από μπλοκ κώδικα για να επιτρέψετε αλλαγή γραμμής (multi-line statement) χωρίς να χρειάζεται να χρησιμοποιείτε τον χαρακτήρα backslash \
-
-
 # 1. Ορισμός του Schema
-## vehicles_to_pandas returns a pd.DataFrame:
-#             A DataFrame containing the travel logs of vehicles, with the columns:
-#
-#             - 'name': the name of the vehicle (platoon).
-#             - 'dn': the platoon size.
-#             - 'orig': the origin node of the vehicle's trip.
-#             - 'dest': the destination node of the vehicle's trip.
-#             - 't': the timestep.
-#             - 'link': the link the vehicle is on (or relevant status).
-#             - 'x': the position of the vehicle on the link.
-#             - 's': the spacing of the vehicle.
-#             - 'v': the speed of the vehicle.
 schema = StructType() \
     .add("name", StringType()) \
     .add("dn", IntegerType()) \
@@ -51,9 +36,6 @@ df = (
 )
 
 # 4. Parsing του JSON και Μετασχηματισμός
-# Χρησιμοποιούμε "cast" για να μετατρέψουμε τις raw binary τιμές σε αναγνώσιμο JSON string.
-# Εφαρμόζουμε το schema στο string, δημιουργώντας ένα struct με την ονομασία data.
-# Κάθε key του JSON (name, orig, dest, etc.) μετατρέπεται σε ξεχωριστή στήλη.
 parsed = (
     df
     .select(col("value").cast("string").alias("json_str"))
@@ -62,8 +44,7 @@ parsed = (
 )
 
 # 5. Υπολογισμός Στατιστικών ανά Ακμή (link) και Χρόνο (t)
-# t = time από την εξομοίωση, v = ταχύτητα οχήματος
-# vcount: πλήθος οχημάτων, vspeed: μέση ταχύτητα
+# BONUS: Προσθήκη max/min speed ανά link
 stats = (
     parsed
     .groupBy(
@@ -72,71 +53,83 @@ stats = (
     )
     .agg(
         count("*").alias("vcount"),
-        avg("v").alias("vspeed")
+        avg("v").alias("vspeed"),
+        max("v").alias("vmax"),    # BONUS: μέγιστη ταχύτητα
+        min("v").alias("vmin")     # BONUS: ελάχιστη ταχύτητα
+    )
+)
+
+# BONUS: Windowed aggregations - μέσες τιμές ανά 30s παράθυρο
+# Δημιουργούμε bucket χρόνου: κάθε 30 δευτερόλεπτα εξομοίωσης = 1 παράθυρο
+# π.χ. t=5,10,15,20,25 → window_start=0 | t=30,35,...,55 → window_start=30
+windowed_stats = (
+    parsed
+    .withColumn("window_start", ((col("t") / 30).cast("integer") * 30).cast("double"))
+    .groupBy("window_start", "link")
+    .agg(
+        count("*").alias("vcount"),
+        avg("v").alias("avg_speed"),
+        max("v").alias("max_speed"),
+        min("v").alias("min_speed")
     )
 )
 
 
-# 6α. Αποθήκευση στη MongoDB των αρχικών δεδομενων
-# Database: traffic, Collection: raw_data
-# Χρησιμοποιούμε foreachBatch για πλήρη έλεγχο της εγγραφής
-def write_raw_to_mongo(batch_df, batch_id):
-    try:
-        rows = batch_df.count()
-        if rows > 0:
+# ── Helper: MongoDB write function ──────────────────────────────────────────
+def make_mongo_writer(database, collection):
+    """Επιστρέφει foreachBatch function που γράφει στη MongoDB."""
+    def write_to_mongo(batch_df, batch_id):
+        try:
             (batch_df.write
                 .format("mongodb")
                 .option("spark.mongodb.write.connection.uri", "mongodb://mongo:27017")
-                .option("spark.mongodb.write.database", "traffic")
-                .option("spark.mongodb.write.collection", "raw_data")
+                .option("spark.mongodb.write.database", database)
+                .option("spark.mongodb.write.collection", collection)
                 .mode("append")
                 .save())
-            print(f"[raw_data] Batch {batch_id}: {rows} rows -> MongoDB OK")
-    except Exception as e:
-        print(f"[raw_data] Batch {batch_id}: ERROR -> {e}")
+            print(f"[{collection}] Batch {batch_id} -> MongoDB OK")
+        except Exception as e:
+            print(f"[{collection}] Batch {batch_id}: ERROR -> {e}")
+    return write_to_mongo
 
+
+# 6α. Αποθήκευση raw δεδομένων → traffic.raw_data
 query_raw = (
     parsed.writeStream
     .outputMode("append")
-    .foreachBatch(write_raw_to_mongo)
+    .foreachBatch(make_mongo_writer("traffic", "raw_data"))
     .option("checkpointLocation", "/tmp/checkpoints/raw")
     .trigger(processingTime="5 seconds")
     .start()
 )
 
-# 6β. Αποθήκευση στη MongoDB των επεξεργασμένων δεδομένων
-# Database: traffic, Collection: stats
-def write_stats_to_mongo(batch_df, batch_id):
-    try:
-        rows = batch_df.count()
-        if rows > 0:
-            (batch_df.write
-                .format("mongodb")
-                .option("spark.mongodb.write.connection.uri", "mongodb://mongo:27017")
-                .option("spark.mongodb.write.database", "traffic")
-                .option("spark.mongodb.write.collection", "stats")
-                .mode("append")
-                .save())
-            print(f"[stats] Batch {batch_id}: {rows} rows -> MongoDB OK")
-    except Exception as e:
-        print(f"[stats] Batch {batch_id}: ERROR -> {e}")
-
+# 6β. Αποθήκευση επεξεργασμένων δεδομένων → traffic.stats
 query_mongo = (
     stats.writeStream
     .outputMode("update")
-    .foreachBatch(write_stats_to_mongo)
+    .foreachBatch(make_mongo_writer("traffic", "stats"))
     .option("checkpointLocation", "/tmp/checkpoints/stats")
     .trigger(processingTime="5 seconds")
     .start()
 )
 
-# 7. Προβολή στην κονσόλα για debugging (προαιρετικά)
+# BONUS: Αποθήκευση windowed aggregations → traffic.windowed_stats
+query_windowed = (
+    windowed_stats.writeStream
+    .outputMode("update")
+    .foreachBatch(make_mongo_writer("traffic", "windowed_stats"))
+    .option("checkpointLocation", "/tmp/checkpoints/windowed")
+    .trigger(processingTime="10 seconds")
+    .start()
+)
+
+# 7. Προβολή stats στην κονσόλα για debugging
 query_console = (
     stats.writeStream
     .outputMode("complete")
     .format("console")
     .option("truncate", False)
-    .option("numRows", 30)
+    .option("numRows", 20)
     .trigger(processingTime="5 seconds")
     .start()
 )
