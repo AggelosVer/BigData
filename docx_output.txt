@@ -1,0 +1,325 @@
+--- Project_Streaming_2026.docx ---
+Συστήματα Διαχείρισης Μεγάλων Δεδομένων (CEID_NE4348 )
+ΥΠΕΥΘΥΝΟΙ ΚΑΘΗΓΗΤΕΣ:  Μεγαλοοικονόμου Βασίλειος, Ζαχαράκη Ευαγγελία
+Έκδοση εγγράφου 1.1 27/04/2026
+ΤΜΗΜΑ ΜΗΧΑΝΙΚΩΝ Η/Υ ΚΑΙ ΠΛΗΡΟΦΟΡΙΚΗΣ
+ΠΑΝΕΠΙΣΤΗΜΙΟ ΠΑΤΡΩΝ
+PROJECT ΕΑΡΙΝΟΥ ΕΞΑΜΗΝΟΥ 2026
+Ημερομηνία παράδοσης: 15/06/2026
+Επεξεργασία Δεδομένων Ροής με Kafka, Spark και MongoDB
+Περιγραφή και στόχοι 
+Στόχος της εργασίας είναι η υλοποίηση μιας ολοκληρωμένης εφαρμογής ανάλυσης ροής δεδομένων η οποία αποτελείται από τα παρακάτω βήματα:
+Παραγωγή δεδομένων κίνησης οχημάτων με τον εξομοιωτή UXSIM
+Αποστολή των δεδομένων σε Redpanda (Kafkacompatible broker, τοπικά)
+Κατανάλωση και επεξεργασία των δεδομένων σε πραγματικό χρόνο με Spark Structured Streaming
+Αποθήκευση raw και επεξεργασμένων δεδομένων σε MongoDB (NoSQL βάση)
+Θα εξοικειωθείτε με έννοιες όπως producers / brokers / topics, streaming επεξεργασία με Spark. Συγκεκριμένα, ο Kafka αποσυνδέει τους παραγωγούς (producers) από τους καταναλωτές (consumers) και αποθηκεύει προσωρινά τα δεδομένα. Το Redpanda υλοποιεί το πρωτόκολλο επικοινωνίας (wire protocol) του Kafka. Οποιαδήποτε εφαρμογή έχει γραφτεί για Kafka (όπως ο παραγωγός UXSIM που χρησιμοποιεί το kafka-python, ή ο connector του Spark για Kafka) λειτουργεί με το Redpanda χωρίς καμία αλλαγή στον κώδικα.
+Περιβάλλον εργασίας
+Κάθε φοιτητής/ομάδα θα δουλέψει τοπικά στον υπολογιστή του:
+Redpanda Local (KafkaAPI compatible broker)
+Apache Spark + PySpark
+MongoDB Community Edition
+Python 3.x και βιβλιοθήκες: pandas, kafka-python, pyspark
+MongoDB driver (μέσω Spark connector)
+Μπορείτε να χρησιμοποιήσετε οποιοδήποτε λειτουργικό (Linux, macOS, Windows με WSL2 ή VM).
+Ερώτημα 1: Παραγωγή και Αποστολή Δεδομένων σε Redpanda
+3.1. Εγκατάσταση και εκτέλεση Redpanda Local
+Εγκαταστήστε το Redpanda Local ακολουθώντας τον επίσημο οδηγό (Community Edition):  https://redpanda.com/try-redpanda 
+Εκκινήστε έναν singlenode broker. 
+Είτε με εγκατασταση του rpk (με CLI)
+Και μετά εναρξη τοπικού cluster με: rpk container start
+Ή με Docker (δειτε ξεχωριστο αρχειο για Windows).
+Βεβαιωθείτε ότι ο broker ακούει στο localhost:9092 (ή σημειώστε το port που χρησιμοποιείτε).
+Δημιουργείστε topic, για παραδειγμα με το όνομα vehicles:
+rpk topic create vehicles
+Αφου ολοκληρωθούν οι εγκαταστάσεις, την επόμενη φορά αρκει να ξεκινησει κανεις τα Ubuntu και να ξεκινησει το Redpanda  με την εντολη: docker start redpanda
+3.2. Παραγωγή δεδομένων με UXSIM
+Εγκαταστήστε και τρέξτε τον εξομοιωτή UXSIM. Χρησιμοποιήστε τη συνάρτηση: vehicles_to_pandas()  για να πάρετε τα δεδομένα κίνησης οχημάτων σε pandas DataFrame.
+Μελετήστε τις στήλες του DataFrame (π.χ. vehicle_id, link, speed, time).
+3.3. Δημιουργία topic στο Redpanda
+Δημιουργήστε ένα topic με όνομα: vehicle_positions . Η δημιουργία μπορεί να γίνει είτε μέσω CLI (rpk topic create vehicle_positions) είτε μέσω εργαλείου/GUI αν χρησιμοποιείτε.
+3.4. Υλοποίηση Kafka producer σε Python
+Γράψτε ένα script σε Python που κάθε Ν δευτερόλεπτα:
+καλεί τον UXSIM για νέα δεδομένα
+φιλτράρει τα οχήματα που βρίσκονται σε κίνηση (π.χ. speed > 0)
+μετατρέπει τις γραμμές σε JSON records και στέλνει κάθε record στο topic vehicle_positions μέσω kafka-python
+Απαιτήσεις:
+Να χρησιμοποιείται η βιβλιοθήκη kafka-python.
+Να υπάρχει παραμετροποίηση του Ν (π.χ. μέσω argument ή config).
+Να υπάρχει βασικός χειρισμός σφαλμάτων (π.χ. σε αποτυχία σύνδεσης).
+Παραδοτέα (Ερώτημα 1):
+Κώδικας producer (Python script)
+Σύντομη περιγραφή (1–2 παράγραφοι) της ροής δεδομένων
+Screenshot/ένδειξη ότι το topic λαμβάνει μηνύματα (π.χ. μέσω rpk topic consume)
+Σημείωση: Εφόσον χρησιμοποιούμε το Redpanda, το οποίο είναι συμβατό με το Kafka API, έχουμε ήδη έναν λειτουργικό broker. Δεν απαιτείται επιπλέον εγκατάσταση Kafka. Το Redpanda είναι το “Kafka” μας. 
+Το μόνο που χρειάζεται:  pip install kafka-python
+Ερώτημα 2: Κατανάλωση και Επεξεργασία με Spark
+1. Εγκατάσταση Spark & PySpark
+Σε τοπικό περιβάλλον εγκαταστήστε το Apache Spark και τη βιβλιοθήκη PySpark:
+pip install pyspark 
+Βεβαιωθείτε ότι μπορείτε να εκκινήσετε ένα απλό Spark job σε Python.
+2. Κατανάλωση δεδομένων από Redpanda (Kafka API)
+Υλοποιήστε μια Spark Structured Streaming εφαρμογή που:
+Συνδέεται στον Redpanda broker (Kafka source):
+kafka.bootstrap.servers = "localhost:9092" (ή το αντίστοιχο)
+subscribe = "vehicle_positions"
+Διαβάζει τα μηνύματα ως stream (readStream).
+Μετατρέπει το value από binary σε string και στη συνέχεια σε JSON.
+3. Ορισμός schema & μετασχηματισμός 
+4. Υπολογισμός στατιστικών ανά ακμή
+Υλοποιήστε επεξεργασία ώστε να παράγεται ένα Spark DataFrame με τα πεδία:
+time: η χρονική στιγμή από την αρχή της εξομοίωσης
+link: το όνομα μιας ακμής
+vcount: το πλήθος οχημάτων μέσα στην ακμή
+vspeed: η μέση ταχύτητα των οχημάτων μέσα στην ακμή
+Οδηγίες:
+Χρησιμοποιήστε groupBy("time", "link").
+Χρησιμοποιήστε συναρτήσεις count(*) και avg("speed").
+Για debugging μπορείτε να χρησιμοποιήσετε writeStream.format("console").
+Παράδειγμα
+stats = (
+    data.groupBy("time", "link")
+        .agg(
+            count("*").alias("vcount"),
+            avg("speed").alias("vspeed")
+        )
+)
+Παραδοτέα (Ερώτημα 2):
+Κώδικας Spark streaming εφαρμογής (Python)
+Σύντομη περιγραφή της λογικής επεξεργασίας
+Ενδεικτική έξοδος (π.χ. screenshot από console sink ή αποθηκευμένο output) και περιγραφή μετρήσεων
+Ερώτημα 3: Αποθήκευση σε MongoDB
+1. Εγκατάσταση MongoDB
+Κατεβάστε το MongoDB Community Edition: https://www.mongodb.com/try/download/community 
+Ξεκινήστε τον MongoDB server: mongod 
+Βεβαιωθείτε ότι μπορείτε να συνδεθείτε στο mongodb://localhost:27017.
+2. MongoDB Spark Connector
+Προσθέστε τον MongoDB Spark Connector στο Spar. Κατεβάστε το jar:  mongo-spark-connector_2.12-10.3.0.jar από:
+https://repo1.maven.org/maven2/org/mongodb/spark/mongo-spark-connector_2.12/10.3.0/
+Ξεκινήστε το PySpark shell:
+pyspark --packages org.mongodb.spark: mongo-spark-connector_2.12-10.3.0 
+Βεβαιωθείτε ότι μπορείτε να γράψετε ένα απλό DataFrame σε MongoDB.
+3. Αποθήκευση raw και επεξεργασμένων δεδομένων
+Χρησιμοποιώντας foreach ή foreachBatch αποθηκεύστε τα raw δεδομένα όπως έρχονται στο Spark από τον Redpanda (Kafka) σε συλλογή, π.χ. Database: traffic, Collection: raw_data. Αποθηκεύστε τα επεξεργασμένα δεδομένα (το DataFrame με time, link, vcount, vspeed) σε συλλογή, π.χ. Database: traffic, Collection: stats.
+Απαιτήσεις:
+Να χρησιμοποιείται mode("append").
+Να γίνεται διαχωρισμός μεταξύ raw και stats συλλογών.
+Να υπάρχει τουλάχιστον ένας απλός έλεγχος ότι τα δεδομένα γράφονται (π.χ. με mongo shell ή GUI).
+Παραδοτέα (Ερώτημα 3):
+Κώδικας αποθήκευσης raw και επεξεργασμένων δεδομένων (Spark streaming με MongoDB sinks)
+Περιγραφή της δομής των συλλογών
+Ενδεικτικά αποτελέσματα (π.χ. μερικά documents από κάθε συλλογή)
+Προτεινόμενη δομή παραδοτέων
+Φάκελος project με:
+producer.py (UXSIM → Redpanda)
+spark_streaming.py (Redpanda → Spark → MongoDB)
+Οποιαδήποτε βοηθητικά modules
+Αναφορά (3–5 σελίδες) με:
+Περιγραφή αρχιτεκτονικής
+Σχεδιαστικές επιλογές
+Προβλήματα που αντιμετωπίστηκαν και λύσεις
+Στην εργασία να συμπεριληφθούν screenshots από Upstash (topic + messages), από MongoDB (collections), από Spark console (ενδεικτικά αποτελέσματα), ένα μικρό aggregation query στη MongoDB (π.χ. μέση ταχύτητα ανά link σε όλο το διάστημα).
+Προαιρετικά (bonus), οι φοιτητές μπορούν να:
+Υλοποιήσουν windowed aggregations (π.χ. μέσες ταχύτητες ανά 30s).
+Προσθέσουν επιπλέον πεδία (π.χ. max/min speed ανά link).
+Υλοποιήσουν απλό REST API που διαβάζει από MongoDB και εμφανίζει στατιστικά.
+Οδηγός εγκατάστασης
+1A. Προτεινόμενος τρόπος: Docker (Linux, macOS, Windows + WSL2)
+Αν έχετε Docker, τρέξτε:
+docker run -d --pull=always --name=redpanda \ -p 9092:9092 -p 9644:9644 \ docker.redpanda.com/redpandadata/redpanda:latest \ redpanda start --overprovisioned --smp 1 --memory 1G --reserve-memory 0M \ --node-id 0 --check=false 
+Αυτό εκκινεί έναν πλήρη Kafkacompatible broker στο:
+Kafka API: localhost:9092
+Admin API: localhost:9644
+Έλεγχος ότι δουλεύει: docker logs redpanda 
+1B. Εναλλακτικός τρόπος: rpk (single binary)
+(Χωρίς Docker — Linux ή macOS)
+Εγκατάσταση rpk:
+curl -LO https://github.com/redpanda-data/redpanda/releases/latest/download/rpk-linux-amd64.zip unzip rpk-linux-amd64.zip sudo mv rpk /usr/local/bin/ 
+Εκκίνηση Redpanda: rpk container start 
+Αυτό κατεβάζει και τρέχει Redpanda σε container με default ρυθμίσεις.
+1C. Windows users (χωρίς Docker Desktop)
+Οι φοιτητές πρέπει να ενεργοποιήσουν WSL2:
+Άνοιγμα PowerShell ως Administrator:
+wsl --install 
+Επανεκκίνηση.
+Εγκατάσταση Ubuntu από Microsoft Store.
+Μέσα στο Ubuntu:
+εγκατάσταση Docker Engine ή Podman
+εκτέλεση της εντολής Docker από το 1A
+Αυτός είναι ο πιο σταθερός τρόπος για Windows.
+2. Εγκατάσταση Apache Spark + PySpark
+Βήμα 1: Εγκατάσταση Java (OpenJDK 11 ή 17)
+Linux: sudo apt install openjdk-17-jdk 
+macOS: brew install openjdk@17 
+Windows (WSL2): sudo apt install openjdk-17-jdk 
+Βήμα 2: Κατέβασμα Spark
+Κατεβάστε το Spark (έκδοση 3.5.x) με Hadoop 3:
+https://spark.apache.org/downloads.html 
+Βήμα 3: Εγκατάσταση PySpark
+Σε Python: pip install pyspark 
+ Βήμα 4: Έλεγχος λειτουργίας
+python3 -c "import pyspark; print(pyspark.__version__)" 
+3. Εγκατάσταση MongoDB Community Edition
+ Linux (Ubuntu): 
+sudo apt-get install -y mongodb sudo systemctl start mongodb 
+macOS:
+brew tap  mongodb/brew brew install mongodb-community brew services start mongodb-community 
+Windows: 
+Κατεβάστε το installer: https://www.mongodb.com/try/download/community 
+Επιλέξτε:
+MongoDB Server
+MongoDB Tools
+Compass (optional)
+ Έλεγχος λειτουργίας:  mongo ή mongosh 
+4. Εγκατάσταση Python βιβλιοθηκών
+pip install pandas kafka-python pymongo 
+5. Έλεγχος σύνδεσης Producer → Redpanda
+Δοκιμαστικός producer:
+from kafka import KafkaProducer 
+import json producer = KafkaProducer( 
+bootstrap_servers="localhost:9092", 
+value_serializer=lambda v: json.dumps(v).encode("utf-8") 
+) 
+producer.send("test_topic", {"msg": "hello"}) 
+producer.flush() 
+print("OK") 
+6. Έλεγχος Spark → Redpanda
+Δοκιμαστικός consumer:
+from pyspark.sql import SparkSession 
+spark = SparkSession.builder.appName("test").getOrCreate() 
+df = ( 
+spark.readStream
+.format("kafka")
+.option("kafka.bootstrap.servers", "localhost:9092")
+.option("subscribe", "test_topic")
+.load()
+) 
+df.writeStream.format("console").start().awaitTermination() 
+7. Έλεγχος Spark → MongoDB
+Απλό write test:
+from pyspark.sql import SparkSession 
+spark = SparkSession.builder 
+.appName("mongo-test")
+.config("spark.mongodb.write.connection.uri", "mongodb://localhost:27017/test.mycol")
+.getOrCreate() 
+df = spark.createDataFrame([{"x": 1}, {"x": 2}]) 
+df.write.format("mongodb")
+.mode("append")
+.save() 
+==========================
+
+--- Running_in_PC.docx ---
+Before starting the procedure, you should know that the ideal layout includes three terminals (Powershell) for your setup (Spark + UXsim producer + Docker/Mongo orchestration):
+for Spark: This is where you run spark-shell, pyspark, or submit jobs. Once you’re inside Spark, you cannot run Docker commands.
+for UXsim (your producer, i.e. UXsim): This is where you run your Python/Java/C++ producer that sends events to Redpanda. This shell stays focused on your simulation logic.
+for Docker / system control: This is where you run: 
+docker compose up -d
+docker ps
+--------------------------------------------------------------------------------
+🟦 1. Start Docker Desktop
+You do not need to log in. You do not need to run as Administrator. Just ensure Docker is running.
+Verify: docker ps 
+You should see no errors.
+🟦 2. Start your project stack
+In the folder where your docker-compose.yml lives:
+cd path\to\your\project 
+docker compose up -d 
+Verify containers: docker ps 
+You should see:
+If these four are running, your environment is ready. If you get “Error response from daemon: Conflict”,  this most probably is a leftover container from a previous run. You can run a full cleanup before each experiment, to avoid these conflicts:
+docker compose down --remove-orphans 
+And then bring your stack up again with docker compose up -d.
+🟦 3. Ensure the Kafka topic exists
+Run: docker exec -it redpanda rpk topic create uxsim 
+If it already exists, Redpanda will tell you.
+🟦 4. If you have not already done it, create your Spark consumer script (Windows) spark_consumer.py 
+🟦 5. Download the required Kafka JARs (Windows) and store them in a folder, e.g. spark-jars:
+Kafka connector (spark-sql-kafka-0-10_2.12-3.5.2.jar), Kafka client library (kafka-clients-3.5.2.jar)
+🟦 6. Copy the JARs and the consumer script into the Spark container
+From PowerShell:
+docker cp spark-jars\spark-sql-kafka-0-10_2.12-3.5.2.jar spark-master:/opt/spark/jars/ 
+docker cp spark-jars\kafka-clients-3.5.2.jar spark-master:/opt/spark/jars/ 
+docker cp spark_consumer.py spark-master:/opt/spark/ 
+docker cp spark-jars\mongo-spark-connector_2.12-10.3.0.jar spark-master:/opt/spark/jars/
+Verify:
+docker exec -it spark-master ls /opt/spark/jars | findstr kafka 
+docker exec -it spark-master ls /opt/spark 
+docker exec -it spark-master ls /opt/spark/jars | findstr mongo
+You should see both JARs and spark_consumer.py. 
+Once the files are inside the container, they stay there as long as the container is not deleted. You need to copy the files again only if you run “docker compose down” with the --volumes flag, or “docker compose build” or “docker rm spark-master”.
+🟦 7. Start the Spark consumer
+Enter the container:
+docker exec -it spark-master bash 
+Also download and copy a critical (sometimes missing) JAR:
+# spark-token-provider (contains KafkaConfigUpdater)
+wget https://repo1.maven.org/maven2/org/apache/spark/spark-token-provider-kafka-0-10_2.12/3.5.2/spark-token-provider-kafka-0-10_2.12-3.5.2.jar -P /opt/spark/jars/
+# commons-pool2 (required by kafka connector)
+wget https://repo1.maven.org/maven2/org/apache/commons/commons-pool2/2.11.1/commons-pool2-2.11.1.jar -P /opt/spark/jars/
+# BSON
+wget https://repo1.maven.org/maven2/org/mongodb/bson/4.11.1/bson-4.11.1.jar -P /opt/spark/jars/
+# MongoDB driver core
+wget https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-core/4.11.1/mongodb-driver-core-4.11.1.jar -P /opt/spark/jars/
+# MongoDB driver sync
+wget https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-sync/4.11.1/mongodb-driver-sync-4.11.1.jar -P /opt/spark/jars/
+# MongoDB driver legacy
+wget https://repo1.maven.org/maven2/org/mongodb/mongodb-driver-legacy/4.11.1/mongodb-driver-legacy-4.11.1.jar -P /opt/spark/jars/
+Run Spark:
+/opt/spark/bin/spark-submit \
+  --master spark://spark-master:7077 \
+  --jars /opt/spark/jars/spark-sql-kafka-0-10_2.12-3.5.2.jar,\
+/opt/spark/jars/kafka-clients-3.5.2.jar,\
+/opt/spark/jars/spark-token-provider-kafka-0-10_2.12-3.5.2.jar,\
+/opt/spark/jars/commons-pool2-2.11.1.jar,\
+/opt/spark/jars/mongo-spark-connector_2.12-10.3.0.jar,\
+/opt/spark/jars/mongodb-driver-sync-4.11.1.jar,\
+/opt/spark/jars/mongodb-driver-core-4.11.1.jar,\
+/opt/spark/jars/bson-4.11.1.jar,\
+/opt/spark/jars/mongodb-driver-legacy-4.11.1.jar \
+  /opt/spark/spark_consumer.py
+If everything is correct, Spark will:
+load the JARs and connect to Redpanda
+start the streaming query
+print microbatch logs continuously
+Leave this terminal open.
+🟦 8. Run your UXSIM producer (Windows)
+In another PowerShell window:
+cd path\to\producer 
+python run_uxsim.py 
+You should see:
+Sent: {...} Sent: {...} 
+🟦 9. Verify MongoDB receives the data. Run from your normal terminal, outside Spark, outside the Spark shell, and outside any container:
+docker exec -it mongo mongosh --eval "use uxsimdb; db.events.countDocuments()"
+If the number increases → your project is complete.
+==========================
+
+--- Running_with_docker.docx ---
+1. The "Prerequisites"
+Before running the commands, ensure these three files are in the same folder:
+docker-compose.yml (The finalized v0.2 version).
+spark_consumer_PC.py (The Spark logic).
+run_uxsim.py (The UXSIM producer script).
+2. Pull and Start the Infrastructure
+Open a terminal in that project folder and run:
+# Pull the 'engine' from Docker Hub and start all containers
+docker-compose up -d
+Docker will automatically see ezachar/db_project2026:v0.2 in the YAML, reach out to the Hub, and download it.
+3. Initialize the Message Broker
+Redpanda (Kafka) needs to know the "address" for the data. You must create the topic once:
+docker exec -it redpanda rpk topic create uxsim
+4. Start the Data Flow (Producer)
+Now, run the simulation script natively on your Windows or Linux host. This sends traffic data into the Docker "pipe."
+# On Windows: python run_uxsim.py
+# On Linux: python3 run_uxsim.py
+5. Verify the Analytics (Consumer)
+The Spark job starts automatically because of the command in your docker-compose.yml. To see if it's actually processing the data and sending it to MongoDB, check the Spark logs:
+docker logs -f spark-job
+If you see "Batch processed" or no errors, the data is moving!
+6. The Final Check (MongoDB)
+To prove the data is landing in the database, hop into the Mongo shell:
+# Enter the MongoDB container
+docker exec -it mongo mongosh
+# Inside the shell, run:
+use uxsimdb
+db.events.find().sort({_id: -1}).limit(1)
+==========================
+
