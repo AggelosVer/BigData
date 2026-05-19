@@ -81,37 +81,42 @@
 Η διαδικασία ξεκινά με την εκκίνηση του UXSIM. Ο κώδικας αρχικοποιεί το δίκτυο, υπολογίζει τις συντεταγμένες και αρχίζει να παράγει εγγραφές ανά τακτά χρονικά διαστήματα (Σχήμα 1). Καθώς τα δεδομένα παράγονται, ταξιδεύουν μέσω του τοπικού δικτύου του Docker προς το topic \texttt{vehicle\_positions} του Redpanda broker, περιμένοντας να καταναλωθούν (Σχήμα 2).
 
 \begin{center}
-    \includegraphics[width=0.65\textwidth]{producer_output.png} 
+    \includegraphics[width=0.95\textwidth]{producer_output.png} 
     \captionof{figure}{Εκτέλεση του παραγωγού και αποστολή μηνυμάτων.}
     
-    \vspace{0.5cm} % Μικρό κενό ανάμεσα στις εικόνες
+    \vspace{0.4cm} % Μικρό κενό ανάμεσα στις εικόνες
     
-    \includegraphics[width=0.65\textwidth]{redpanda_topic.png} 
+    \includegraphics[width=0.95\textwidth]{redpanda_topic.png} 
     \captionof{figure}{Λήψη των JSON μηνυμάτων από το Broker.}
 \end{center}
 
 
 \subsection{Επεξεργασία Ροής και Υπολογισμός (Spark)}
 
-\begin{minipage}[t]{0.45\textwidth}
-  Η πιο κρίσιμη διεργασία λαμβάνει χώρα εντός του Apache Spark. Όπως παρατηρούμε στο Σχήμα 3, το Spark χωρίζει τη συνεχή ροή σε διακριτά "Batches". 
+\begin{minipage}[t]{0.56\textwidth}
+  \vspace{0pt}
+  Η πιο κρίσιμη διεργασία λαμβάνει χώρα εντός του Apache Spark. Όπως παρατηρούμε στο Σχήμα 3, το Spark Structured Streaming χωρίζει τη συνεχή ροή σε διακριτά "Batches" (micro-batches) με προκαθορισμένο trigger interval. 
   
-  Στον πίνακα της κονσόλας φαίνονται ξεκάθαρα οι στήλες που έχουμε ορίσει: ο χρόνος προσομοίωσης (\texttt{time}), το τμήμα του δικτύου (\texttt{link}) και οι βασικές μετρικές, δηλαδή το πλήθος των οχημάτων (\texttt{vcount}) και η μέση ταχύτητά τους (\texttt{vspeed}).
+  \medskip
+  Στον πίνακα της κονσόλας φαίνονται ξεκάχαρα οι στήλες που έχουμε ορίσει: ο χρόνος προσομοίωσης (\texttt{time}), το τμήμα του δικτύου (\texttt{link}) και οι βασικές μετρικές, δηλαδή το πλήθος των οχημάτων (\texttt{vcount}) και η μέση ταχύτητά τους (\texttt{vspeed}).
 
+  \medskip
   Επιπλέον, αποδεικνύεται η ορθή λειτουργία των \textbf{Bonus ερωτημάτων}, καθώς στον πίνακα έχουν προστεθεί και τυπώνονται ζωντανά οι τιμές μέγιστης (\texttt{vmax}) και ελάχιστης (\texttt{vmin}) ταχύτητας.
+
+  \medskip
+  Αμέσως κάτω από τους πίνακες, το Spark επιβεβαιώνει την επικοινωνία του με τη βάση δεδομένων εκτυπώνοντας τα μηνύματα \texttt{MongoDB OK} για κάθε ξεχωριστό batch. Σημειώνεται ότι εκτός από τα \texttt{[stats]} και \texttt{[raw\_data]}, το σύστημα αποθηκεύει επιτυχώς και τα \texttt{[windowed\_stats]}, τα οποία αφορούν τον υπολογισμό των κινητών μέσων όρων ανά 30 δευτερόλεπτα (το δεύτερο Bonus).
+
+  \medskip
+  Η λειτουργία του Spark Streaming παραμένει ενεργή και αδιάλειπτη καθ'όλη τη διάρκεια της προσομοίωσης, χωρίς να παρατηρούνται καθυστερήσεις (bottlenecks) στη μνήμη του Worker node.
 \end{minipage}
 \hfill
-\begin{minipage}[t]{0.5\textwidth}
+\begin{minipage}[t]{0.39\textwidth}
   \vspace{0pt} 
   \centering
   \includegraphics[width=\textwidth]{spark_console_bonus.png}
   \captionof{figure}{Έξοδος του Spark Console που απεικονίζει τα micro-batches.}
 \end{minipage}
 \vspace{0.5cm}
-
-Αμέσως κάτω από τους πίνακες, το Spark επιβεβαιώνει την επικοινωνία του με τη βάση δεδομένων εκτυπώνοντας τα μηνύματα \texttt{MongoDB OK}. Σημειώνεται ότι εκτός από τα \texttt{[stats]} και \texttt{[raw\_data]}, το σύστημα αποθηκεύει επιτυχώς και τα \texttt{[windowed\_stats]}, τα οποία αφορούν τον υπολογισμό των κινητών μέσων όρων ανά 30 δευτερόλεπτα (το δεύτερο Bonus).
-
-Η λειτουργία του Spark Streaming παραμένει ενεργή και αδιάλειπτη καθ'όλη τη διάρκεια της προσομοίωσης, χωρίς να παρατηρούνται καθυστερήσεις (bottlenecks) στη μνήμη του Worker node.
 
 \subsection{Μόνιμη Αποθήκευση στη MongoDB}
 Η τρίτη φάση του pipeline αφορά την επικύρωση των εγγραφών στη βάση δεδομένων. Μέσω του κελύφους \texttt{mongosh}, πραγματοποιήθηκαν ερωτήματα επιβεβαίωσης. Στο Σχήμα 4, παρουσιάζεται η εντολή \texttt{findOne()} τόσο για τη συλλογή \texttt{raw\_data} (όπου βλέπουμε την ακατέργαστη εγγραφή ενός οχήματος) όσο και για τη συλλογή \texttt{stats} (όπου βλέπουμε το aggregated document).
@@ -124,26 +129,23 @@ db.stats.aggregate([
 \end{verbatim}
 Τα αποτελέσματα του παραπάνω ερωτήματος αποτυπώνονται στο Σχήμα 5.
 
-\begin{figure}[ht!]
-    \centering
-    \includegraphics[width=0.8\textwidth]{mongo_collections.png} 
-    \caption{Ανάκτηση εγγραφών (raw και aggregated) από τη MongoDB.}
-\end{figure}
-
-\begin{figure}[ht!]
-    \centering
-    \includegraphics[width=0.6\textwidth]{aggregation.png} 
-    \caption{Εκτέλεση του Aggregation Query για την εξαγωγή του συνολικού μέσου όρου.}
-\end{figure}
+\begin{center}
+    \includegraphics[width=0.75\textwidth]{mongo_collections.png} 
+    \captionof{figure}{Ανάκτηση εγγραφών (raw και aggregated) από τη MongoDB.}
+    
+    \vspace{0.4cm}
+    
+    \includegraphics[width=0.75\textwidth]{aggregation.png} 
+    \captionof{figure}{Εκτέλεση του Aggregation Query για την εξαγωγή του συνολικού μέσου όρου.}
+\end{center}
 
 \subsection{Διεπαφή Χρήστη (REST API - Bonus)}
 Τέλος, το API που κατασκευάστηκε σε Flask εκτελείται στην πόρτα 5000. Στο Σχήμα 6 φαίνεται η εκκίνηση του server. 
 
-\begin{figure}[ht!]
-    \centering
-    \includegraphics[width=0.7\textwidth]{rest_api.png} 
-    \caption{Εκκίνηση του REST API Server.}
-\end{figure}
+\begin{center}
+    \includegraphics[width=0.8\textwidth]{rest_api.png} 
+    \captionof{figure}{Εκκίνηση του REST API Server.}
+\end{center}
 
 Μέσω αυτού του API, οποιοσδήποτε client (π.χ. ένα Dashboard) μπορεί να αντλήσει τα δεδομένα. Παρακάτω παρατίθεται η απόκριση (JSON Response) του συστήματος από το endpoint \texttt{/api/windowed}, το οποίο επιβεβαιώνει τον υπολογισμό των Windowed Aggregations:
 
