@@ -1,0 +1,7 @@
+uxsim
+kafka-python
+numpy
+pandas
+Pillow
+flask
+pymongo
