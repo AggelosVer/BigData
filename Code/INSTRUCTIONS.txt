@@ -41,6 +41,20 @@
 (Το Spark job θα συνδεθεί στον Redpanda, θα επεξεργάζεται τα δεδομένα,
 θα τα τυπώνει στην οθόνη σε Batches και θα τα αποθηκεύει στη MongoDB).
 
+# Έλεγχος αποθηκευμένων δεδομένων στη MongoDB (PowerShell):
+
+# 1. Εμφάνιση μίας ενδεικτικής εγγραφής στιγμιαίων στατιστικών (stats)
+docker exec -it mongo mongosh --eval "db.getSiblingDB('traffic').getCollection('stats').findOne()"
+
+# 2. Εμφάνιση μίας ενδεικτικής εγγραφής χρονικών παραθύρων (windowed stats)
+docker exec -it mongo mongosh --eval "db.getSiblingDB('traffic').getCollection('windowed_stats').findOne()"
+
+# 3. Υπολογισμός συνολικού μέσου όρου ταχύτητας ανά δρόμο (από τα στιγμιαία stats)
+docker exec -it mongo mongosh --eval "db.getSiblingDB('traffic').getCollection('stats').aggregate([{`$group: {_id: '`$link', avg_overall_speed: {`$avg: '`$vspeed'}}}])"
+
+# 4. Υπολογισμός συνολικού μέσου όρου ταχύτητας ανά δρόμο (από τα windowed stats)
+docker exec -it mongo mongosh --eval "db.getSiblingDB('traffic').getCollection('windowed_stats').aggregate([{`$group: {_id: '`$link', avg_overall_speed: {`$avg: '`$avg_speed'}}}])"
+
 -------------------------------------------------------------------------
 ΒΗΜΑ 4: BONUS - REST API
 -------------------------------------------------------------------------

@@ -3,6 +3,19 @@ from pyspark.sql.functions import from_json, col, avg, count, max, min
 from pyspark.sql.types import StructType, StringType, DoubleType, IntegerType
 
 # 1. Ορισμός του Schema
+## vehicles_to_pandas returns a pd.DataFrame:
+#             A DataFrame containing the travel logs of vehicles, with the columns:
+#
+#             - 'name': the name of the vehicle (platoon).
+#             - 'dn': the platoon size.
+#             - 'orig': the origin node of the vehicle's trip.
+#             - 'dest': the destination node of the vehicle's trip.
+#             - 't': the timestep.
+#             - 'link': the link the vehicle is on (or relevant status).
+#             - 'x': the position of the vehicle on the link.
+#             - 's': the spacing of the vehicle.
+#             - 'v': the speed of the vehicle.
+
 schema = StructType() \
     .add("name", StringType()) \
     .add("dn", IntegerType()) \
@@ -77,16 +90,26 @@ windowed_stats = (
 
 # ── Helper: MongoDB write function ──────────────────────────────────────────
 def make_mongo_writer(database, collection):
-    """Επιστρέφει foreachBatch function που γράφει στη MongoDB."""
+    """Επιστρέφει foreachBatch function που γράφει στη MongoDB με υποστήριξη upsert."""
     def write_to_mongo(batch_df, batch_id):
         try:
-            (batch_df.write
+            writer = (batch_df.write
                 .format("mongodb")
                 .option("spark.mongodb.write.connection.uri", "mongodb://mongo:27017")
                 .option("spark.mongodb.write.database", database)
-                .option("spark.mongodb.write.collection", collection)
-                .mode("append")
-                .save())
+                .option("spark.mongodb.write.collection", collection))
+            
+            # Για τα aggregations ορίζουμε operationType και idFieldList ώστε να γίνεται αντικατάσταση (replace)
+            if collection == "stats":
+                writer = (writer
+                    .option("operationType", "replace")
+                    .option("idFieldList", "time,link"))
+            elif collection == "windowed_stats":
+                writer = (writer
+                    .option("operationType", "replace")
+                    .option("idFieldList", "window_start,link"))
+                
+            writer.mode("append").save()
             print(f"[{collection}] Batch {batch_id} -> MongoDB OK")
         except Exception as e:
             print(f"[{collection}] Batch {batch_id}: ERROR -> {e}")
