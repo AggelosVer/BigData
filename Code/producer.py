@@ -18,7 +18,7 @@ def simulate_traffic():
     W = World(
         name="",
         deltan=5,
-        tmax=3600,  # 1 hour simulation
+        tmax=3600,
         print_mode=1, save_mode=0, show_mode=0,
         random_seed=seed,
         duo_update_time=600
@@ -92,7 +92,6 @@ def kafka_producer_loop(W, N, topic="vehicle_positions"):
         snapshot = df[df[time_col] == t]
         
         # Φιλτράρισμα: Κρατάμε μόνο όσα οχήματα βρίσκονται σε κίνηση (speed > 0)
-        # Στο output του UXSIM, η ταχύτητα είναι η στήλη 'v'
         moving_vehicles = snapshot[snapshot['v'] > 0]
         
         count = 0
@@ -104,8 +103,7 @@ def kafka_producer_loop(W, N, topic="vehicle_positions"):
             
         producer.flush()
         print(f"Χρόνος προσομοίωσης t={t}: Στάλθηκαν {count} κινούμενα οχήματα στο topic '{topic}'")
-        
-        # Αναμονή N δευτερόλεπτα (παραμετροποιημένο)
+
         time.sleep(N)
 
 if __name__ == "__main__":
@@ -116,4 +114,3 @@ if __name__ == "__main__":
 
     W = simulate_traffic()
     kafka_producer_loop(W, N=args.interval, topic=args.topic)
-    print("Η διαδικασία ολοκληρώθηκε.")

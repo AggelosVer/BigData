@@ -57,7 +57,6 @@ parsed = (
 )
 
 # 5. Υπολογισμός Στατιστικών ανά Ακμή (link) και Χρόνο (t)
-# BONUS: Προσθήκη max/min speed ανά link
 stats = (
     parsed
     .groupBy(
@@ -67,14 +66,12 @@ stats = (
     .agg(
         count("*").alias("vcount"),
         avg("v").alias("vspeed"),
-        max("v").alias("vmax"),    # BONUS: μέγιστη ταχύτητα
-        min("v").alias("vmin")     # BONUS: ελάχιστη ταχύτητα
+        max("v").alias("vmax"),   
+        min("v").alias("vmin")    
     )
 )
 
-# BONUS: Windowed aggregations - μέσες τιμές ανά 30s παράθυρο
-# Δημιουργούμε bucket χρόνου: κάθε 30 δευτερόλεπτα εξομοίωσης = 1 παράθυρο
-# π.χ. t=5,10,15,20,25 → window_start=0 | t=30,35,...,55 → window_start=30
+# Windowed aggregations - μέσες τιμές ανά 30s παράθυρο
 windowed_stats = (
     parsed
     .withColumn("window_start", ((col("t") / 30).cast("integer") * 30).cast("double"))
@@ -88,7 +85,6 @@ windowed_stats = (
 )
 
 
-# ── Helper: MongoDB write function ──────────────────────────────────────────
 def make_mongo_writer(database, collection):
     """Επιστρέφει foreachBatch function που γράφει στη MongoDB με υποστήριξη upsert."""
     def write_to_mongo(batch_df, batch_id):
@@ -99,7 +95,6 @@ def make_mongo_writer(database, collection):
                 .option("spark.mongodb.write.database", database)
                 .option("spark.mongodb.write.collection", collection))
             
-            # Για τα aggregations ορίζουμε operationType και idFieldList ώστε να γίνεται αντικατάσταση (replace)
             if collection == "stats":
                 writer = (writer
                     .option("operationType", "replace")
@@ -116,7 +111,7 @@ def make_mongo_writer(database, collection):
     return write_to_mongo
 
 
-# 6α. Αποθήκευση raw δεδομένων → traffic.raw_data
+# 6α. Αποθήκευση raw δεδομένων traffic.raw_data
 query_raw = (
     parsed.writeStream
     .outputMode("append")
@@ -126,7 +121,7 @@ query_raw = (
     .start()
 )
 
-# 6β. Αποθήκευση επεξεργασμένων δεδομένων → traffic.stats
+# 6β. Αποθήκευση επεξεργασμένων δεδομένων traffic.stats
 query_mongo = (
     stats.writeStream
     .outputMode("update")
@@ -136,7 +131,7 @@ query_mongo = (
     .start()
 )
 
-# BONUS: Αποθήκευση windowed aggregations → traffic.windowed_stats
+# Αποθήκευση windowed aggregations traffic.windowed_stats
 query_windowed = (
     windowed_stats.writeStream
     .outputMode("update")

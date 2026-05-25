@@ -1,17 +1,3 @@
-"""
-REST API για στατιστικά κίνησης οχημάτων από MongoDB.
-BONUS: Απλό Flask API που διαβάζει από τη βάση traffic.
-
-Εγκατάσταση:  pip install flask pymongo
-Εκτέλεση:     python api.py
-Endpoints:
-  GET /api/stats              → Τελευταία στατιστικά ανά link
-  GET /api/stats/<link>       → Στατιστικά για συγκεκριμένη ακμή
-  GET /api/windowed           → Windowed aggregations (30s buckets)
-  GET /api/raw/count          → Πλήθος raw εγγραφών
-  GET /api/links              → Λίστα με όλες τις ακμές
-"""
-
 from flask import Flask, jsonify
 from pymongo import MongoClient
 from bson import ObjectId
@@ -19,22 +5,12 @@ import json
 
 app = Flask(__name__)
 
-# Σύνδεση στη MongoDB
 client = MongoClient("mongodb://localhost:27017")
 db = client["traffic"]
 
-
-def clean(doc):
-    """Μετατροπή ObjectId σε string για JSON serialization."""
-    doc["_id"] = str(doc["_id"])
-    return doc
-
-
-# ── Endpoints ────────────────────────────────────────────────────────────────
-
+# Endpoints
 @app.route("/api/stats", methods=["GET"])
 def get_stats():
-    """Επιστρέφει τα τελευταία στατιστικά ανά link (τελευταίος χρόνος)."""
     pipeline = [
         {"$sort": {"time": -1}},
         {"$group": {
@@ -55,7 +31,7 @@ def get_stats():
 
 @app.route("/api/stats/<link>", methods=["GET"])
 def get_stats_for_link(link):
-    """Επιστρέφει όλα τα στατιστικά για μια συγκεκριμένη ακμή."""
+    #Επιστρέφει όλα τα στατιστικά για μια συγκεκριμένη ακμή.
     docs = list(
         db["stats"]
         .find({"link": link}, {"_id": 0})
@@ -68,7 +44,7 @@ def get_stats_for_link(link):
 
 @app.route("/api/windowed", methods=["GET"])
 def get_windowed():
-    """Επιστρέφει windowed aggregations (30s buckets) για όλες τις ακμές."""
+    #Επιστρέφει windowed aggregations (30s buckets) για όλες τις ακμές.
     docs = list(
         db["windowed_stats"]
         .find({}, {"_id": 0})
@@ -80,14 +56,14 @@ def get_windowed():
 
 @app.route("/api/raw/count", methods=["GET"])
 def get_raw_count():
-    """Επιστρέφει το πλήθος των raw εγγραφών στη βάση."""
+    #Επιστρέφει το πλήθος των raw εγγραφών στη βάση.
     count = db["raw_data"].count_documents({})
     return jsonify({"raw_data_count": count})
 
 
 @app.route("/api/links", methods=["GET"])
 def get_links():
-    """Επιστρέφει λίστα με όλες τις μοναδικές ακμές."""
+    #Επιστρέφει λίστα με όλες τις μοναδικές ακμές.
     links = db["stats"].distinct("link")
     return jsonify(sorted(links))
 
